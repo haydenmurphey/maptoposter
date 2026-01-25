@@ -522,16 +522,6 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     ax.plot([0.4, 0.6], [0.125, 0.125], transform=ax.transAxes, 
             color=THEME['text'], linewidth=1 * scale_factor, zorder=11)
 
-    # --- ATTRIBUTION (bottom right) ---
-    if FONTS:
-        font_attr = FontProperties(fname=FONTS['light'], size=8)
-    else:
-        font_attr = FontProperties(family='monospace', size=8)
-    
-    ax.text(0.98, 0.02, "© OpenStreetMap contributors", transform=ax.transAxes,
-            color=THEME['text'], alpha=0.5, ha='right', va='bottom', 
-            fontproperties=font_attr, zorder=11)
-
     # 5. Save
     print(f"Saving to {output_file}...")
 
