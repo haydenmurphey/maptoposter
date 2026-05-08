@@ -39,26 +39,61 @@ python create_map_poster.py --city <city> --country <country> [options]
 |--------|-------|-------------|---------|
 | `--city` | `-c` | City name | required |
 | `--country` | `-C` | Country name | required |
-| **OPTIONAL:** `--name` | | Override display name (city display on poster) | |
-| **OPTIONAL:** `--country-label` | | Override display country (country display on poster) | |
-| **OPTIONAL:** `--theme` | `-t` | Theme name | feature_based |
-| **OPTIONAL:** `--distance` | `-d` | Map radius in meters | 29000 |
-| **OPTIONAL:** `--list-themes` | | List all available themes | |
-| **OPTIONAL:** `--all-themes` | | Generate posters for all available themes | |
-| **OPTIONAL:** `--width` | `-W` | Image width in inches | 12 |
-| **OPTIONAL:** `--height` | `-H` | Image height in inches | 16 |
+| `--country-label` | | Override country text displayed on poster | |
+| `--theme` | `-t` | Theme name | `feature_based` |
+| `--distance` | `-d` | Map radius in meters | `29000` |
+| `--list-themes` | | List all available themes | |
+| `--all-themes` | | Generate posters for all available themes | |
+| `--width` | `-W` | Poster width in inches — sets physical print size | `12` |
+| `--height` | `-H` | Poster height in inches — sets physical print size | `16` |
+| `--dpi` | `-D` | Output DPI for PNG (use `150` for preview, `300` for print) | `300` |
+| `--upscale` | `-u` | Post-render Lanczos upscale factor, e.g. `2.0` for 2× (PNG only) | `1.0` |
+| `--format` | `-f` | Output format: `png`, `svg`, or `pdf` | `png` |
 
-### Resolution Guide (300 DPI)
+### Poster Size & Resolution
 
-Use these values for `-W` and `-H` to target specific resolutions:
+The script renders directly at the size you specify — no external upscaling needed. The output pixel dimensions are simply:
 
-| Target | Resolution (px) | Inches (-W / -H) |
-|--------|-----------------|------------------|
-| **Instagram Post** | 1080 x 1080 | 3.6 x 3.6 |
-| **Mobile Wallpaper** | 1080 x 1920 | 3.6 x 6.4 |
-| **HD Wallpaper** | 1920 x 1080 | 6.4 x 3.6 |
-| **4K Wallpaper** | 3840 x 2160 | 12.8 x 7.2 |
-| **A4 Print** | 2480 x 3508 | 8.3 x 11.7 |
+```
+width_px  = --width  × --dpi
+height_px = --height × --dpi
+```
+
+**Common print sizes at 300 DPI:**
+
+| Print size | `-W` | `-H` | Output pixels | Use case |
+|------------|------|------|---------------|----------|
+| 8×10 in | `8` | `10` | 2400×3000 | Desk / small frame |
+| 11×14 in | `11` | `14` | 3300×4200 | Standard small poster |
+| 12×16 in | `12` | `16` | 3600×4800 | Default |
+| 18×24 in | `18` | `24` | 5400×7200 | Classic poster |
+| 24×30 in | `24` | `30` | 7200×9000 | Large wall poster |
+| 24×36 in | `24` | `36` | 7200×10800 | Full-size gallery poster |
+
+**Digital / screen targets at 300 DPI:**
+
+| Target | `-W` | `-H` | Output pixels |
+|--------|------|------|---------------|
+| Instagram post | `3.6` | `3.6` | 1080×1080 |
+| Mobile wallpaper | `3.6` | `6.4` | 1080×1920 |
+| 4K wallpaper | `12.8` | `7.2` | 3840×2160 |
+| A4 print | `8.3` | `11.7` | 2480×3508 |
+
+### Using `--dpi` and `--upscale`
+
+**`--dpi`** controls the rendering resolution directly. Lower DPI renders faster and produces smaller files — useful for iterating on city/theme combinations before committing to a full-resolution render.
+
+**`--upscale`** applies a [Pillow LANCZOS](https://pillow.readthedocs.io/en/stable/handbook/concepts.html#filters-comparison-table) upscale pass after the render. LANCZOS is the highest-quality resampler available in Pillow and works well on map content (crisp lines, hard edges). The intended workflow is: render fast at low DPI, then upscale once to print resolution.
+
+```bash
+# Render at half resolution for speed, then upscale 2× → same final pixel count as 300 DPI
+python create_map_poster.py -c "Paris" -C "France" -t pastel_dream --dpi 150 --upscale 2.0
+
+# Render native at 300 DPI — no upscaling step, best quality
+python create_map_poster.py -c "Paris" -C "France" -t pastel_dream --dpi 300
+```
+
+Both approaches produce similar output sizes. The native render at 300 DPI is higher fidelity; the 150 DPI + 2× upscale is faster for large poster dimensions.
 
 ### Examples
 
@@ -95,6 +130,13 @@ python create_map_poster.py --list-themes
 
 # Generate posters for every theme
 python create_map_poster.py -c "Tokyo" -C "Japan" --all-themes
+
+# Print-ready poster sizes (no external upscaling needed)
+python create_map_poster.py -c "Paris" -C "France" -t pastel_dream -d 10000 -W 18 -H 24      # 18×24 in @ 300 DPI
+python create_map_poster.py -c "Tokyo" -C "Japan" -t japanese_ink -d 15000 -W 24 -H 36       # 24×36 in @ 300 DPI
+
+# Quick preview at low DPI, then 2× Lanczos upscale via Pillow
+python create_map_poster.py -c "New York" -C "USA" -t noir -d 12000 --dpi 150 --upscale 2.0
 ```
 
 ### Distance Guide
@@ -200,6 +242,16 @@ Quick reference for contributors who want to extend or modify the script.
 | `create_gradient_fade()` | Top/bottom fade effect | Modifying gradient overlay |
 | `load_theme()` | JSON theme → dict | Adding new theme properties |
 
+**`create_poster()` signature:**
+```python
+create_poster(city, country, point, dist, output_file, output_format,
+              width=12, height=16, dpi=300, upscale=1.0,
+              country_label=None, name_label=None)
+```
+- `width` / `height` — matplotlib figure size in inches; directly sets output pixel count at the given DPI
+- `dpi` — passed to `plt.savefig()` for PNG; controls rendering resolution
+- `upscale` — if `!= 1.0`, opens the saved PNG with Pillow and resizes using `Image.LANCZOS` before overwriting the file
+
 ### Rendering Layers (z-order)
 
 ```
@@ -273,4 +325,5 @@ G = ox.graph_from_point(point, dist=dist, network_type='walk')   # pedestrian
 - Large `dist` values (>20km) = slow downloads + memory heavy
 - Cache coordinates locally to avoid Nominatim rate limits
 - Use `network_type='drive'` instead of `'all'` for faster renders
-- Reduce `dpi` from 300 to 150 for quick previews
+- Use `--dpi 150` for quick previews; `--dpi 300` (default) for print-ready output
+- For large poster dimensions (24×36+), `--dpi 150 --upscale 2.0` renders faster than native 300 DPI with comparable quality

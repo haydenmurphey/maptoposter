@@ -378,7 +378,7 @@ def fetch_features(point, dist, tags, name) -> GeoDataFrame | None:
 
 
 
-def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, country_label=None, name_label=None):
+def create_poster(city, country, point, dist, output_file, output_format, width=12, height=16, dpi=300, upscale=1.0, country_label=None, name_label=None):
     print(f"\nGenerating map for {city}, {country}...")
     
     # Progress bar for data fetching
@@ -528,13 +528,22 @@ def create_poster(city, country, point, dist, output_file, output_format, width=
     fmt = output_format.lower()
     save_kwargs = dict(facecolor=THEME["bg"], bbox_inches="tight", pad_inches=0.05,)
 
-    # DPI matters mainly for raster formats
     if fmt == "png":
-        save_kwargs["dpi"] = 300
+        save_kwargs["dpi"] = dpi
 
     plt.savefig(output_file, format=fmt, **save_kwargs)
-
     plt.close()
+
+    if fmt == "png" and upscale != 1.0:
+        from PIL import Image
+        print(f"Upscaling by {upscale}x using Lanczos resampling...")
+        img = Image.open(output_file)
+        new_w = int(img.width * upscale)
+        new_h = int(img.height * upscale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        img.save(output_file, dpi=(dpi * upscale, dpi * upscale))
+        print(f"✓ Upscaled to {new_w}x{new_h} pixels ({new_w/dpi:.1f}x{new_h/dpi:.1f} in at {dpi} DPI)")
+
     print(f"✓ Done! Poster saved as {output_file}")
 
 
@@ -586,6 +595,32 @@ Options:
   --all-themes      Generate posters for all themes
   --distance, -d    Map radius in meters (default: 29000)
   --list-themes     List all available themes
+
+Poster size options (no external upscaling needed):
+  --width, -W       Poster width in inches (default: 12)
+  --height, -H      Poster height in inches (default: 16)
+  --dpi, -D         Output DPI for PNG (default: 300). 150 = preview, 300 = print quality
+  --upscale, -u     Post-render upscale factor via Pillow Lanczos (e.g. 2.0 = 2x).
+                    Useful for boosting resolution without re-rendering the full map.
+
+Common poster sizes (width x height in inches):
+  8x10     Desktop / small print
+  11x14    Standard small poster
+  12x16    Default — balanced size and speed
+  18x24    Classic poster (large format)
+  24x30    Large wall poster
+  24x36    Full-size movie/gallery poster
+
+Pixel output at 300 DPI (ready-to-print, no upscaling needed):
+  12x16 → 3600x4800   (default)
+  18x24 → 5400x7200
+  24x36 → 7200x10800
+
+Example: 24x36 print-ready poster of Paris:
+  python create_map_poster.py -c "Paris" -C "France" -t pastel_dream -W 24 -H 36
+
+Example: quick preview at low DPI, then 2x Lanczos upscale:
+  python create_map_poster.py -c "Tokyo" -C "Japan" -t japanese_ink -W 12 -H 16 --dpi 150 --upscale 2.0
 
 Distance guide:
   4000-6000m   Small/dense cities (Venice, Amsterdam old center)
@@ -640,10 +675,12 @@ Examples:
     parser.add_argument('--theme', '-t', type=str, default='feature_based', help='Theme name (default: feature_based)')
     parser.add_argument('--all-themes', '--All-themes', dest='all_themes', action='store_true', help='Generate posters for all themes')
     parser.add_argument('--distance', '-d', type=int, default=29000, help='Map radius in meters (default: 29000)')
-    parser.add_argument('--width', '-W', type=float, default=12, help='Image width in inches (default: 12)')
-    parser.add_argument('--height', '-H', type=float, default=16, help='Image height in inches (default: 16)')
+    parser.add_argument('--width', '-W', type=float, default=12, help='Poster width in inches (default: 12). Sets physical print size.')
+    parser.add_argument('--height', '-H', type=float, default=16, help='Poster height in inches (default: 16). Sets physical print size.')
+    parser.add_argument('--dpi', '-D', type=int, default=300, help='Output DPI for PNG format (default: 300). Use 150 for preview, 300+ for print quality.')
+    parser.add_argument('--upscale', '-u', type=float, default=1.0, help='Post-render upscale factor using Pillow Lanczos resampling (e.g. 2.0 = 2x). PNG only.')
     parser.add_argument('--list-themes', action='store_true', help='List all available themes')
-    parser.add_argument('--format', '-f', default='png', choices=['png', 'svg', 'pdf'],help='Output format for the poster (default: png)')
+    parser.add_argument('--format', '-f', default='png', choices=['png', 'svg', 'pdf'], help='Output format for the poster (default: png)')
     
     args = parser.parse_args()
     
@@ -687,7 +724,7 @@ Examples:
         for theme_name in themes_to_generate:
             THEME = load_theme(theme_name)
             output_file = generate_output_filename(args.city, theme_name, args.format)
-            create_poster(args.city, args.country, coords, args.distance, output_file, args.format, args.width, args.height, country_label=args.country_label)
+            create_poster(args.city, args.country, coords, args.distance, output_file, args.format, args.width, args.height, dpi=args.dpi, upscale=args.upscale, country_label=args.country_label)
         
         print("\n" + "=" * 50)
         print("✓ Poster generation complete!")
